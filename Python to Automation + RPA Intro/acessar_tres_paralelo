@@ -1,0 +1,82 @@
+# Async: acessar três páginas em paralelo
+# Importa o módulo asyncio para gerenciar a execução assíncrona
+import asyncio
+
+# Importa a API ASSÍNCRONA do Playwright
+# Note: async_playwright em vez de sync_playwright
+from playwright.async_api import async_playwright
+
+# Importa datetime para medir o tempo total
+from datetime import datetime
+
+# Define a função que acessa UMA página — note o async def
+async def acessar_pagina(browser, url):
+
+    # Abre uma nova página dentro do browser
+    # O await libera o controle enquanto espera a página abrir
+    page = await browser.new_page()
+
+    # Navega para a URL
+    # O await libera o controle enquanto a página carrega
+    # Outras páginas podem carregar ao mesmo tempo
+    await page.goto(url)
+
+    # Aguarda a rede ficar quieta
+    await page.wait_for_load_state('networkidle')
+
+    # Captura o título
+    titulo = await page.title()
+
+    # Fecha a página após capturar o título
+    await page.close()
+
+    # Retorna o resultado como tupla
+    return url, titulo
+
+# Define a função principal — também precisa ser async
+async def acessar_paralelo():
+
+    # Registra o tempo de início
+    inicio = datetime.now()
+
+    # Lista de URLs para acessar em paralelo
+    urls = [
+        'https://www.saucedemo.com',
+        'https://www.selenium.dev/selenium/web/web-form.html',
+        'https://the-internet.herokuapp.com',
+    ]
+
+    # Inicia o Playwright assíncrono
+    async with async_playwright() as p:
+
+        # Abre o browser
+        browser = await p.chromium.launch(headless=True)
+
+        # Cria uma lista de tarefas — uma para cada URL
+        # Cada tarefa é uma chamada a acessar_pagina()
+        # mas NENHUMA executa ainda — são apenas agendadas
+        tarefas = [
+            acessar_pagina(browser, url)
+            for url in urls
+        ]
+
+        # asyncio.gather() dispara TODAS as tarefas ao mesmo tempo
+        # e aguarda todas terminarem
+        # É aqui que o paralelismo acontece de fato
+        resultados = await asyncio.gather(*tarefas)
+
+        # Percorre e imprime os resultados
+        for url, titulo in resultados:
+            print(f'URL: {url}')
+            print(f'Título: {titulo}')
+            print()
+
+        # Fecha o browser
+        await browser.close()
+
+    # Calcula o tempo total
+    total = (datetime.now() - inicio).total_seconds()
+    print(f'Tempo total (paralelo): {total:.2f} segundos')
+
+# asyncio.run() inicia o loop assíncrono e executa a função principal
+asyncio.run(acessar_paralelo())
